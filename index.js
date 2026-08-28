@@ -14,8 +14,6 @@ const path = require('path')
 
 const configPath = path.join(__dirname, 'config.json')
 
-// Re-reads config.json from disk each time it's called, so adding/removing
-// a channel id there takes effect on the next purge cycle without a restart.
 function getPurgeChannelIds() {
     try {
         const raw = fs.readFileSync(configPath, 'utf8')
@@ -78,6 +76,6 @@ process.on('SIGINT', () => shutdown('SIGINT'))
 process.on('SIGTERM', () => shutdown('SIGTERM'))
 
 main().catch((error) => {
-    logger.error(`Failed to start End Services: ${error.message}`)
+    logger.error(`Failed to start Zepher: ${error.message}`)
     process.exit(1)
 })
