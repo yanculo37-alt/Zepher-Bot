@@ -1,0 +1,29 @@
+{
+  "name": "Zepher",
+  "version": "1.0.0",
+  "description": "Discord Realm Crash Bot",
+  "main": "index.js",
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "scripts": {
+    "start": "node index.js",
+    "deploy": "node deploycommands.js"
+  },
+  "dependencies": {
+    "discord.js": "^14.16.3",
+    "mongoose": "^8.8.3",
+    "prismarine-auth": "^2.7.0",
+    "prismarine-nbt": "^2.7.0",
+    "protodef": "^1.19.0",
+    "jsonwebtoken": "^9.0.2",
+    "jose": "^5.9.6",
+    "json-bigint": "^1.0.0",
+    "debug": "^4.3.7",
+    "uuid": "^9.0.1",
+    "uuid-1345": "^1.0.2",
+    "ws": "^8.18.0",
+    "typescript": "^5.0.0",
+    "@roamhq/wrtc": "^0.9.1"
+  }
+}

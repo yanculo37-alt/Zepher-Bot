@@ -1,0 +1,9 @@
+{
+  "token": "",
+  "applicationId": "",
+  "mongodbUri": "",
+"logChannelId": "",
+    "purgeChannelIds": [
+        ""
+    ]
+}
