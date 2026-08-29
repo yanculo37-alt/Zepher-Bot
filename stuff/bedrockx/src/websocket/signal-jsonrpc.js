@@ -33,7 +33,7 @@ class NethernetJSONRPC extends EventEmitter {
         await this.init()
         await Promise.race([
             once(this, "credentials"),
-            new Promise((_, reject) => setTimeout(() => reject(), 15000))
+            new Promise((_, reject) => setTimeout(() => reject(new Error('Timed out waiting for TURN credentials from the NetherNet signalling server')), 15000))
         ])
     }
 
@@ -75,6 +75,8 @@ class NethernetJSONRPC extends EventEmitter {
     async reconnectWithBackoff() {
         if (this.destroyed) return
 
+        // Grow the delay with each consecutive failure (capped), but never
+        // stop retrying - the connection should stay alive indefinitely.
         const delay = Math.min(15000 * Math.max(1, this.retryCount), 60000)
         await new Promise((r) => setTimeout(r, delay));
 
@@ -134,6 +136,8 @@ class NethernetJSONRPC extends EventEmitter {
 
     onError(err) {
         console.error(err);
+        // Don't throw if nobody is listening for "error" - just log and let
+        // the close handler take care of reconnecting.
         if (this.listenerCount("error") > 0) {
             this.emit("error", err instanceof Error ? err : new Error(String(err)))
         }
@@ -149,11 +153,15 @@ class NethernetJSONRPC extends EventEmitter {
 
         console.warn(`Signal closed: ${code} ${reason} - reconnecting...`)
 
+        // Always try to resume - never give up and never throw an
+        // unhandled "error" for a closed signaling connection. The retry
+        // count is only used to grow the backoff delay, not to stop retrying.
         this.retryCount++
         try {
             await this.destroy(true)
         } catch (err) {
             console.error("Error while reconnecting signaling socket:", err)
+            // Even if destroy/reconnect throws, keep trying instead of dying.
             this.reconnectWithBackoff().catch(() => {})
         }
     }
@@ -255,6 +263,7 @@ class NethernetJSONRPC extends EventEmitter {
             if (signal.data.includes("tcp") || signal.data.includes("::1") || signal.data.includes("127.0.0.1")) return;
 
             this.candidates.push(signal)
+            // Don't write yet, just store for later, and then we will write them after connectrequest
             return
         }
 
