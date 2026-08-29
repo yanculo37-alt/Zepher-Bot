@@ -3,8 +3,15 @@ const { Client } = require('./client')
 function createClient(options) {
     const client = new Client({ port: 19132, ...options, delayedInit: true })
 
-    client.once('connect_allowed', () => connect(client))
-    client.init()
+    client.once('connect_allowed', () => {
+        connect(client).catch((err) => {
+            client.emit('error', err instanceof Error ? err : new Error(String(err)))
+        })
+    })
+
+    client.init().catch((err) => {
+        client.emit('error', err instanceof Error ? err : new Error(String(err)))
+    })
 
     return client
 }
