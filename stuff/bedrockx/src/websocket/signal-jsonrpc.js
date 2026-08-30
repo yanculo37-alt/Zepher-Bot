@@ -4,7 +4,19 @@ const { SignalStructure } = require('../nethernet/index')
 const { v4fast: v4 } = require("uuid-1345")
 const JSONBigInt = require('json-bigint')({ useNativeBigInt: true })
 
-const MAX_RETRIES = 5
+const BASE_DELAY_MS = 15000
+const MAX_DELAY_MS = 5 * 60 * 1000
+const RATE_LIMIT_MIN_DELAY_MS = 60000
+
+const LOG_EVERY_N_AFTER = 5
+
+function backoffDelay(retryCount, rateLimited) {
+    const exponential = BASE_DELAY_MS * Math.pow(2, Math.min(retryCount, 10))
+    const jitter = 0.85 + Math.random() * 0.3
+    let delay = Math.min(exponential * jitter, MAX_DELAY_MS)
+    if (rateLimited) delay = Math.max(delay, RATE_LIMIT_MIN_DELAY_MS)
+    return Math.round(delay)
+}
 
 class NethernetJSONRPC extends EventEmitter {
     constructor(networkId, authflow, version, serverNetworkId) {
@@ -24,6 +36,9 @@ class NethernetJSONRPC extends EventEmitter {
         this.lastLiveness = 0
         this.connectionId = null
         this.didSendCandidates = false
+
+        this.rateLimited = false
+        this.retryAfterMs = null
     }
 
     async connect() {
@@ -75,9 +90,14 @@ class NethernetJSONRPC extends EventEmitter {
     async reconnectWithBackoff() {
         if (this.destroyed) return
 
-        // Grow the delay with each consecutive failure (capped), but never
-        // stop retrying - the connection should stay alive indefinitely.
-        const delay = Math.min(15000 * Math.max(1, this.retryCount), 60000)
+        const delay = this.retryAfterMs ?? backoffDelay(this.retryCount, this.rateLimited)
+        this.retryAfterMs = null
+
+        if (this.shouldLogAttempt()) {
+            const reason = this.rateLimited ? 'rate limited (429)' : 'connection lost'
+            console.warn(`[nethernet-signal] Reconnecting in ${Math.round(delay / 1000)}s (${reason}, attempt ${this.retryCount})`)
+        }
+
         await new Promise((r) => setTimeout(r, delay));
 
         if (this.destroyed) return
@@ -85,9 +105,15 @@ class NethernetJSONRPC extends EventEmitter {
         try {
             await this.init();
         } catch (e) {
-            console.error("Signal reconnect attempt failed, will retry:", e)
+            if (this.shouldLogAttempt()) {
+                console.error(`[nethernet-signal] Reconnect attempt ${this.retryCount} failed: ${e?.message ?? e}`)
+            }
             this.reconnectWithBackoff().catch(() => {})
         }
+    }
+
+    shouldLogAttempt() {
+        return this.retryCount <= LOG_EVERY_N_AFTER || this.retryCount % LOG_EVERY_N_AFTER === 0
     }
 
     async init() {
@@ -99,6 +125,17 @@ class NethernetJSONRPC extends EventEmitter {
             const ws = new WebSocket(address, { headers: { Authorization: xbl.mcToken, "session-id": v4(), "request-id": v4() } })
             this.ws = ws
             this.lastLiveness = Date.now()
+
+            ws.on("unexpected-response", (req, res) => {
+                this.rateLimited = res.statusCode === 429
+                const retryAfterHeader = res.headers?.['retry-after']
+                this.retryAfterMs = retryAfterHeader ? parseRetryAfter(retryAfterHeader) : null
+                if (this.shouldLogAttempt()) {
+                    console.warn(`[nethernet-signal] Signalling server responded ${res.statusCode}${this.rateLimited ? ' (rate limited)' : ''}`)
+                }
+                res.resume()
+                ws.terminate()
+            })
 
             ws.on("open", () => this.onOpen())
             ws.on("close", (code, reason) => this.onClose(code, reason.toString()))
@@ -125,6 +162,8 @@ class NethernetJSONRPC extends EventEmitter {
 
     onOpen() {
         this.retryCount = 0
+        this.rateLimited = false
+        this.retryAfterMs = null
         this.lastLiveness = Date.now()
         this.ws.send(JSON.stringify({
             params: {},
@@ -135,9 +174,11 @@ class NethernetJSONRPC extends EventEmitter {
     }
 
     onError(err) {
-        console.error(err);
-        // Don't throw if nobody is listening for "error" - just log and let
-        // the close handler take care of reconnecting.
+        const message = err?.message ?? String(err)
+        if (!/unexpected server response: 429/i.test(message) && this.shouldLogAttempt()) {
+            console.error(`[nethernet-signal] Socket error: ${message}`)
+        }
+
         if (this.listenerCount("error") > 0) {
             this.emit("error", err instanceof Error ? err : new Error(String(err)))
         }
@@ -151,17 +192,13 @@ class NethernetJSONRPC extends EventEmitter {
 
         if (this.destroyed) return
 
-        console.warn(`Signal closed: ${code} ${reason} - reconnecting...`)
-
-        // Always try to resume - never give up and never throw an
-        // unhandled "error" for a closed signaling connection. The retry
-        // count is only used to grow the backoff delay, not to stop retrying.
         this.retryCount++
         try {
             await this.destroy(true)
         } catch (err) {
-            console.error("Error while reconnecting signaling socket:", err)
-            // Even if destroy/reconnect throws, keep trying instead of dying.
+            if (this.shouldLogAttempt()) {
+                console.error(`[nethernet-signal] Error while reconnecting: ${err?.message ?? err}`)
+            }
             this.reconnectWithBackoff().catch(() => {})
         }
     }
@@ -263,7 +300,6 @@ class NethernetJSONRPC extends EventEmitter {
             if (signal.data.includes("tcp") || signal.data.includes("::1") || signal.data.includes("127.0.0.1")) return;
 
             this.candidates.push(signal)
-            // Don't write yet, just store for later, and then we will write them after connectrequest
             return
         }
 
@@ -378,4 +414,14 @@ function formatIceUrl(parsed) {
 
 function defaultPortForScheme(scheme) {
     return scheme === "stuns" ? 3478 : 5349
+}
+
+function parseRetryAfter(headerValue) {
+    const seconds = Number(headerValue)
+    if (Number.isFinite(seconds)) return Math.max(0, seconds * 1000)
+
+    const date = Date.parse(headerValue)
+    if (!Number.isNaN(date)) return Math.max(0, date - Date.now())
+
+    return null
 }
