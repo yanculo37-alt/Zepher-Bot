@@ -34,6 +34,8 @@ class Client extends EventEmitter {
     this.signalHandler = this.sendDiscoveryMessage
 
     this.running = false
+    this.loggedConnectErrors = new Set()
+    this.loggedStableAnswer = false
 
     this.sendDiscoveryRequest()
 
@@ -72,10 +74,16 @@ class Client extends EventEmitter {
 
     switch (this.rtcConnection.signalingState) {
       case "stable":
-        console.error("Received answer in stable state, ignoring.")
+        if (!this.loggedStableAnswer) {
+          console.error("Received answer in stable state, ignoring.")
+          this.loggedStableAnswer = true
+        }
         return
       case "closed":
-        console.error("Received answer for closed connection, ignoring.")
+        if (!this.loggedStableAnswer) {
+          console.error("Received answer for closed connection, ignoring.")
+          this.loggedStableAnswer = true
+        }
         return
     }
 
@@ -116,6 +124,7 @@ class Client extends EventEmitter {
   }
 
   async createOffer() {
+    this.loggedStableAnswer = false
     this.rtcConnection = new RTCPeerConnection({ iceServers: this.credentials, bundlePolicy: 'max-bundle' })
     this.connection = new Connection(this, this.connectionId, this.rtcConnection)
 
@@ -218,7 +227,11 @@ class Client extends EventEmitter {
   }
 
   handleConnectError(signal) {
-    console.error(`NetherNet connect error (code ${signal.data}) for connection ${signal.connectionId}`)
+    const key = `${signal.connectionId}:${signal.data}`
+    if (!this.loggedConnectErrors.has(key)) {
+      console.error(`NetherNet connect error (code ${signal.data}) for connection ${signal.connectionId}`)
+      this.loggedConnectErrors.add(key)
+    }
 
     if (this.rtcConnection) {
       this.rtcConnection.close()
