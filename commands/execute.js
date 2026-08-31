@@ -122,26 +122,34 @@ module.exports = {
             return
         }
 
-        const INTERACTION_TOKEN_TTL_MS = 14 * 60 * 1000
-        const interactionStart = interaction.createdTimestamp
-        let fallbackMessage = null
+        let dmChannel
+        try {
+            dmChannel = await interaction.user.createDM()
+        } catch (error) {
+            logger.warn?.(`[/execute] Could not open DM for ${userId}: ${error?.message ?? error}`)
+            await interaction.editReply({
+                components: [errorContainer('DMs unavailable', 'I could not message you. Please enable DMs from server members and try again.')],
+                flags: ComponentsV2Flags
+            })
+            return
+        }
 
-        const safeEdit = async (payload) => {
-            const tokenExpired = (Date.now() - interactionStart) >= INTERACTION_TOKEN_TTL_MS
+        await interaction.editReply({
+            components: [infoContainer('Check your DMs', `**${realm.name}**\nProgress updates for this execute are being sent to your DMs.`)],
+            flags: ComponentsV2Flags
+        })
 
-            if (!tokenExpired && !fallbackMessage) {
-                try {
-                    await interaction.editReply(payload)
-                    return
-                } catch (err) {
-                    logger.warn?.(`[/execute] editReply failed: ${err?.message ?? err}`)
+        let dmMessage = null
+
+        const dmEdit = async (payload) => {
+            try {
+                if (!dmMessage) {
+                    dmMessage = await dmChannel.send(payload)
+                } else {
+                    await dmMessage.edit(payload)
                 }
-            }
-
-            if (!fallbackMessage) {
-                fallbackMessage = await interaction.channel.send(payload).catch(() => null)
-            } else {
-                await fallbackMessage.edit(payload).catch(() => {})
+            } catch (err) {
+                logger.warn?.(`[/execute] DM edit failed for ${userId}: ${err?.message ?? err}`)
             }
         }
 
@@ -165,8 +173,12 @@ module.exports = {
             for (let i = 0; i < loops; i++) {
                 if (job.cancelled) break
 
-                await safeEdit({
-                    components: [infoContainer('Executing', `**${realm.name}**\nLoop ${i + 1}/${loops} attempting…\n\n${NOTE}`)],
+                // Every 10 loops, start a fresh DM message (1-10, 11-20, ...)
+                if (i > 0 && i % 10 === 0) dmMessage = null
+
+
+                await dmEdit({
+                    components: [infoContainer('Executing', `**${realm.name}**\nLoop ${i + 1}/${loops} attemptingâ¦\n\n${NOTE}`)],
                     flags: ComponentsV2Flags
                 })
 
@@ -174,7 +186,7 @@ module.exports = {
                 try {
                     host = await realmApi.getConnectionInfo(realm.id)
                 } catch (error) {
-                    await safeEdit({
+                    await dmEdit({
                         components: [errorContainer('Execute failed', `**${realm.name}**\n${error.message || 'Failed to fetch realm connection info.'}`)],
                         flags: ComponentsV2Flags
                     })
@@ -183,7 +195,7 @@ module.exports = {
                 }
 
                 if (host?.networkProtocol !== 'NETHERNET_JSONRPC') {
-                    await safeEdit({
+                    await dmEdit({
                         components: [errorContainer('Execute failed', `**${realm.name}**\n\`${host?.networkProtocol}\` is not a supported protocol for this method!`)],
                         flags: ComponentsV2Flags
                     })
@@ -204,8 +216,8 @@ module.exports = {
                 if (job.cancelled) break
 
                 if (i < loops - 1) {
-                    await safeEdit({
-                        components: [infoContainer('Executing', `**${realm.name}**\nLoop ${i + 1}/${loops} done. Attempting…\n\n${NOTE}`)],
+                    await dmEdit({
+                        components: [infoContainer('Executing', `**${realm.name}**\nLoop ${i + 1}/${loops} done. Attemptingâ¦\n\n${NOTE}`)],
                         flags: ComponentsV2Flags
                     })
                     await cancellableDelay(LOOP_DELAY_MS, job)
@@ -213,19 +225,19 @@ module.exports = {
             }
 
             if (job.cancelled) {
-                await safeEdit({
+                await dmEdit({
                     components: [infoContainer('Execute cancelled', `**${realm.name}**\nCancelled after ${completedLoops}/${loops} loop(s).`)],
                     flags: ComponentsV2Flags
                 })
             } else {
-                await safeEdit({
+                await dmEdit({
                     components: [successContainer('Execute complete', `**${realm.name}**\nCompleted ${completedLoops}/${loops} loop(s).`)],
                     flags: ComponentsV2Flags
                 })
             }
         } catch (error) {
             logger.error(`[/execute] Loop error for ${userId}: ${error.message}`)
-            await safeEdit({
+            await dmEdit({
                 components: [errorContainer('Execute failed', 'An unexpected error occurred during execution.')],
                 flags: ComponentsV2Flags
             }).catch(() => {})
