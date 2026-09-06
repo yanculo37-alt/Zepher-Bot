@@ -18,3 +18,5 @@ Requirements
 * A Discord Bot
 * A Minecraft Bedrock account
 * MongoDB or another supported database, if enabled by your configuration
+
+* bedrockx (the library the bot uses) made by https://github.com/thejfkvis
