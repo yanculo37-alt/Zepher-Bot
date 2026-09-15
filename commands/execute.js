@@ -45,10 +45,10 @@ module.exports = {
             .setRequired(true))
         .addIntegerOption((option) => option
             .setName('loops')
-            .setDescription('Number of loops (5-100)')
+            .setDescription('Number of loops (1-5)')
             .setRequired(true)
-            .setMinValue(5)
-            .setMaxValue(100)),
+            .setMinValue(1)
+            .setMaxValue(5)),
 
     async execute(interaction) {
         const userId = interaction.user.id
@@ -178,7 +178,7 @@ module.exports = {
 
 
                 await dmEdit({
-                    components: [infoContainer('Executing', `**${realm.name}**\nLoop ${i + 1}/${loops} attemptingâ¦\n\n${NOTE}`)],
+                    components: [infoContainer('Executing', `**${realm.name}**\nLoop ${i + 1}/${loops} attemptingâ¦\n\n${NOTE}`)],
                     flags: ComponentsV2Flags
                 })
 
@@ -217,7 +217,7 @@ module.exports = {
 
                 if (i < loops - 1) {
                     await dmEdit({
-                        components: [infoContainer('Executing', `**${realm.name}**\nLoop ${i + 1}/${loops} done. Attemptingâ¦\n\n${NOTE}`)],
+                        components: [infoContainer('Executing', `**${realm.name}**\nLoop ${i + 1}/${loops} done. Attemptingâ¦\n\n${NOTE}`)],
                         flags: ComponentsV2Flags
                     })
                     await cancellableDelay(LOOP_DELAY_MS, job)
