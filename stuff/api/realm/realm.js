@@ -1,8 +1,8 @@
 const { resilientFetch } = require('../../utils/resilientFetch')
 
 const endpoint = 'bedrock.frontendlegacy.realms.minecraft-services.net'
-const gameVersion = '1.26.45'
-const protocolVersion = '2169'
+const gameVersion = '1.26.50'
+const protocolVersion = '2193'
 
 async function describeAccessDenied(response) {
     let detail = ''
