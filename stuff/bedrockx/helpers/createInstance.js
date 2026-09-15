@@ -48,8 +48,8 @@ async function createInstance(realm, account, settings) {
         port,
         networkId: host,
 
-        version: '1.26.45',
-        protocolVersion: 2169,
+        version: '1.26.50',
+        protocolVersion: 2193,
         transport: protocol,
 
         external,
