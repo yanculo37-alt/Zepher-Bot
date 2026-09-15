@@ -9,8 +9,8 @@ compiler.addTypes(require('../datatypes/compiler-minecraft'))
 
 const proto = compiler.compileProtoDefSync()
 
-const PROTOCOL_VERSION = 2169
-const GAME_VERSION = '1.26.45'
+const PROTOCOL_VERSION = 2193
+const GAME_VERSION = '1.26.50'
 
 function createSerializer() {
   return new Serializer(proto, 'mcpe_packet')
