@@ -61,7 +61,7 @@ class bpClient {
             port: this.address.port,
             transport,
             networkId: transport.startsWith("NETHERNET") ? this.address.networkId : "",
-            version: this.configuration.version || "1.26.30",
+            version: this.configuration.version || "1.26.50",
             authflow: this.dbUser.authflow,
             authTitle: this.userFlow.authTitle,
             deviceType: this.userFlow.deviceType,
