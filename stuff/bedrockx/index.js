@@ -2,6 +2,7 @@ const { createRealmClient } = require('./client')
 const { unregisterRelaysForClient } = require('./chatRelay')
 const { describeDisconnect } = require('../utils/disconnectReasons')
 const { isRealmWhitelisted } = require('../../database/models/whitelist')
+const logger = require('../utils/logger')
 
 const activeConnections = new Map()
 
@@ -64,15 +65,28 @@ function connectToRealm(discordId, realmId, authflow, connection, deviceProfile)
         })
 
         client.on('error', (error) => {
+            const message = String(error?.message ?? error)
+            const recoverable = error?.partialReadError || /read error|partial|incomplete|out of bounds/i.test(message)
+
+            if (settled && recoverable) {
+                logger.warn(`[realm ${realmId}] ignoring packet parse error: ${message}`)
+                return
+            }
+
             const alreadySettled = settled
             settled = true
 
             clearTimeout(timeout)
             activeConnections.delete(key)
             unregisterRelaysForClient(client)
-            client.disconnect('Protocol error')
 
-            if (!alreadySettled) reject(error instanceof Error ? error : new Error(String(error)))
+            if (alreadySettled) {
+                client.emit('kick', { message: `Protocol error: ${message}` })
+            } else {
+                reject(error instanceof Error ? error : new Error(String(error)))
+            }
+
+            client.disconnect('Protocol error')
         })
 
         client.once('close', () => {
