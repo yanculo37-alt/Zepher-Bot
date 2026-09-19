@@ -1,5 +1,9 @@
 const { createClient, PROTOCOL_VERSION, GAME_VERSION } = require('./src/index')
 const { v4, v3 } = require('uuid')
+const logger = require('../utils/logger')
+
+const SEND_MOVEMENT = false
+const TRACE_SIZE = 25
 
 function toActiveFlags(flags) {
     if (Array.isArray(flags)) return flags
@@ -199,7 +203,27 @@ function createRealmClient(authflow, connection, deviceProfile) {
     const client = createClient(options)
 
     client.kicked = false
+    client.kickReported = false
     client.moveIntervalHandle = null
+
+    let startGameAt = null
+    const trace = []
+    const note = (entry) => {
+        trace.push(entry)
+        if (trace.length > TRACE_SIZE) trace.shift()
+    }
+
+    const baseEmit = client.emit.bind(client)
+    client.emit = (name, ...args) => {
+        if (typeof name === 'string' && name !== 'status') note(`<- ${name}`)
+        return baseEmit(name, ...args)
+    }
+
+    const baseWrite = client.write.bind(client)
+    client.write = (name, params) => {
+        if (name !== 'player_auth_input') note(`-> ${name}`)
+        return baseWrite(name, params)
+    }
 
     attachMovement(client)
     attachChat(client)
@@ -217,20 +241,41 @@ function createRealmClient(authflow, connection, deviceProfile) {
         client._disconnect(reason)
     }
 
-    client.on('close', () => {
-        client.emit('kick', { message: 'Connection to server lost' })
+    client.on('kick', () => {
+        client.kickReported = true
+    })
+
+    client.on('close', (reason) => {
+        if (client.moveIntervalHandle) clearInterval(client.moveIntervalHandle)
+        client.moveIntervalHandle = null
+
+        const timing = startGameAt ? `${Date.now() - startGameAt}ms after start_game` : 'before start_game'
+        logger.warn(`[realm] transport closed (${reason ?? 'no reason'}) ${timing}. Last events: ${trace.join(' | ')}`)
+
+        if (client.kickReported) return
+
+        const raw = reason ? ` (raw reason: ${reason})` : ''
+        client.emit('kick', { message: `Connection to server lost${raw}` })
     })
 
     client.on('start_game', ({ player_position = { x: 0, y: 0, z: 0 }, runtime_entity_id = 0, current_tick = 0 } = {}) => {
+        startGameAt = Date.now()
         client.currentPosition = player_position
         client.runtime = runtime_entity_id
         client.tick = BigInt(current_tick)
 
         client.write('serverbound_loading_screen', { type: 2 })
+        client.write('set_local_player_as_initialized', { runtime_entity_id })
 
-        client.moveIntervalHandle = setInterval(() => {
-            client.move(client.currentPosition)
-        }, 50)
+        if (!SEND_MOVEMENT) return
+
+        client.once('play_status', function onPlayStatus(packet) {
+            if (packet?.status !== 'player_spawn') return client.once('play_status', onPlayStatus)
+
+            client.moveIntervalHandle = setInterval(() => {
+                client.move(client.currentPosition)
+            }, 50)
+        })
     })
 
     client.on('respawn', (data) => {
