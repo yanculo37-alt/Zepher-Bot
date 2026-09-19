@@ -120,6 +120,10 @@ module.exports = {
                 return
             }
 
+            const ownerProfile = realm.ownerUUID
+                ? await account.fetchProfilesByXuids([realm.ownerUUID]).then((profiles) => profiles.get(realm.ownerUUID)).catch(() => null)
+                : null
+
             const rawConnection = await realmApi.getConnectionInfo(realm.id)
             const connection = normalizeConnection(rawConnection)
             const deviceProfile = account.getDeviceProfile()
@@ -165,7 +169,8 @@ module.exports = {
                 await dm([errorContainer('Disconnected', `Lost connection to ${realm.name}.\n${reasonText}`)])
             })
 
-            await interaction.editReply({ components: [successContainer('Teleport logger started', `Connected to ${realm.name}. Teleports will appear in your DMs.`)], flags: ComponentsV2Flags })
+            await interaction.editReply({ components: [successContainer('Teleport logger started', `Connected to **${realm.name}**. Teleports will appear in your DMs.`)], flags: ComponentsV2Flags })
+            await dm([successContainer(realm.name || 'Teleport logger', "I'll DM you here whenever a teleport is detected.", undefined, ownerProfile?.gamerpic ?? null)])
         } catch (error) {
             logger.error(`Teleport logger failed for ${interaction.user.id}: ${error.message}`)
 
