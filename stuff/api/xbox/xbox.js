@@ -69,10 +69,10 @@ class XboxAccount {
         return `XBL3.0 x=${token.userHash};${token.XSTSToken}`
     }
 
-    async fetchGamertag() {
+    async fetchProfile() {
         const authHeader = await this.getXboxToken('http://xboxlive.com')
 
-        const response = await resilientFetch('https://profile.xboxlive.com/users/me/profile/settings?settings=Gamertag', {
+        const response = await resilientFetch('https://profile.xboxlive.com/users/me/profile/settings?settings=Gamertag,GameDisplayPicRaw', {
             headers: {
                 'x-xbl-contract-version': '2',
                 Authorization: authHeader
@@ -84,9 +84,18 @@ class XboxAccount {
         }
 
         const data = await response.json()
-        const gamertagSetting = data?.profileUsers?.[0]?.settings?.find((setting) => setting.id === 'Gamertag')
+        const settings = data?.profileUsers?.[0]?.settings ?? []
+        const gamertag = settings.find((setting) => setting.id === 'Gamertag')?.value
+        const rawPic = settings.find((setting) => setting.id === 'GameDisplayPicRaw')?.value
+        const gamerpic = rawPic ? rawPic.replace(/^http:/, 'https:') : null
 
-        return gamertagSetting?.value
+        return { gamertag, gamerpic }
+    }
+
+    async fetchGamertag() {
+        const { gamertag } = await this.fetchProfile()
+
+        return gamertag
     }
 
     async fetchGamertagsByXuids(xuids) {
@@ -155,11 +164,13 @@ class XboxAccount {
 
     async getProfile() {
         const token = await this.getXboxToken()
-        this.gamertag = await this.fetchGamertag()
+        const { gamertag, gamerpic } = await this.fetchProfile()
+        this.gamertag = gamertag
 
         return {
             xuid: this.xuid,
             gamertag: this.gamertag,
+            gamerpic,
             token
         }
     }
