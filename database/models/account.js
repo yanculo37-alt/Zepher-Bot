@@ -4,6 +4,7 @@ const accountSchema = new mongoose.Schema({
     discordId: { type: String, required: true, unique: true },
     xuid: { type: String, required: true, unique: true },
     gamertag: { type: String, required: true },
+    gamerpic: { type: String, default: null },
     linkedAt: { type: Date, default: Date.now }
 })
 
@@ -17,10 +18,10 @@ async function getAccountByXuid(xuid) {
     return Account.findOne({ xuid })
 }
 
-async function linkAccount(discordId, xuid, gamertag) {
+async function linkAccount(discordId, xuid, gamertag, gamerpic = null) {
     return Account.findOneAndUpdate(
         { discordId },
-        { discordId, xuid, gamertag, linkedAt: new Date() },
+        { discordId, xuid, gamertag, gamerpic, linkedAt: new Date() },
         { upsert: true, new: true }
     )
 }
