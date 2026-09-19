@@ -9,6 +9,21 @@ function microsoftLinkUrl(code) {
     return `https://www.microsoft.com/link?otc=${encodeURIComponent(code)}`
 }
 
+async function fetchGamerpicSafe(discordId) {
+    try {
+        const xbox = new XboxAccount(discordId)
+        const profile = await Promise.race([
+            xbox.fetchProfile(),
+            new Promise((_, reject) => setTimeout(() => reject(new Error('timed out')), 8000))
+        ])
+
+        return profile.gamerpic ?? null
+    } catch (error) {
+        logger.warn(`Could not fetch gamerpic for ${discordId}: ${error.message}`)
+        return null
+    }
+}
+
 async function link(interaction) {
     await interaction.deferReply({ flags: MessageFlags.Ephemeral })
 
@@ -59,10 +74,10 @@ async function link(interaction) {
             return
         }
 
-        await linkAccount(interaction.user.id, profile.xuid, profile.gamertag)
+        await linkAccount(interaction.user.id, profile.xuid, profile.gamertag, profile.gamerpic)
 
         await interaction.editReply({
-            components: [successContainer('Successfully linked', `Linked to ${profile.gamertag}.`)],
+            components: [successContainer('Successfully linked', `Linked to ${profile.gamertag}.`, undefined, profile.gamerpic)],
             flags: ComponentsV2Flags
         })
     } catch (error) {
@@ -87,6 +102,8 @@ async function unlink(interaction) {
         return
     }
 
+    const gamerpic = account.gamerpic || await fetchGamerpicSafe(interaction.user.id)
+
     disconnectAllForUser(interaction.user.id)
 
     await unlinkAccount(interaction.user.id)
@@ -98,7 +115,7 @@ async function unlink(interaction) {
     }
 
     await interaction.editReply({
-        components: [successContainer('Successfully unlinked', `Your account ${account.gamertag} has been unlinked.`)],
+        components: [successContainer('Successfully unlinked', `Your account ${account.gamertag} has been unlinked.`, undefined, gamerpic)],
         flags: ComponentsV2Flags
     })
 }
