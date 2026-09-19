@@ -51,19 +51,26 @@ class Client extends Connection {
         switch (this.options.transport) {
             case "NETHERNET":
             case "NETHERNET_JSONRPC":
-                this.connection = new NethernetClient({ networkId: this.options.networkId, token: this.token, privateKey: this.ecdhKeyPair.privateKey })
+                try {
+                    this.connection = new NethernetClient({ networkId: this.options.networkId, token: this.token, privateKey: this.ecdhKeyPair.privateKey })
 
-                this.batchHeader = null
-                this.disableEncryption = true
+                    this.batchHeader = null
+                    this.disableEncryption = true
 
-                this.nethernet.signalling = this.options.transport === "NETHERNET_JSONRPC" ? new NethernetJSONRPC(this.connection.nethernet.networkId, this.options.authflow, this.options.version, this.options.networkId) : new NethernetSignal(this.connection.nethernet.networkId, this.options.authflow, this.options.version, this.options.networkId)
+                    this.nethernet.signalling = this.options.transport === "NETHERNET_JSONRPC" ? new NethernetJSONRPC(this.connection.nethernet.networkId, this.options.authflow, this.options.version, this.options.networkId) : new NethernetSignal(this.connection.nethernet.networkId, this.options.authflow, this.options.version, this.options.networkId)
 
-                await this.nethernet.signalling.connect()
+                    await this.nethernet.signalling.connect()
 
-                this.connection.nethernet.credentials = this.nethernet.signalling.credentials
-                this.connection.nethernet.signalHandler = this.nethernet.signalling.write.bind(this.nethernet.signalling)
+                    this.connection.nethernet.credentials = this.nethernet.signalling.credentials
+                    this.connection.nethernet.signalHandler = this.nethernet.signalling.write.bind(this.nethernet.signalling)
 
-                this.nethernet.signalling.on('signal', signal => this.connection.nethernet.handleSignal(signal))
+                    this.nethernet.signalling.on('signal', signal => this.connection.nethernet.handleSignal(signal))
+                } catch (e) {
+                    const err = e instanceof Error ? e : new Error(String(e))
+                    console.error("Failed to initialize Nethernet connection:", err)
+                    this.emit('error', err)
+                    return
+                }
                 break;
             case "DEFAULT":
                 this.connection = new RakClient({ host: this.options.host, port: this.options.port })
