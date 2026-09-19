@@ -98,36 +98,54 @@ class XboxAccount {
         return gamertag
     }
 
-    async fetchGamertagsByXuids(xuids) {
+    async fetchProfilesByXuids(xuids) {
         if (!Array.isArray(xuids) || !xuids.length) return new Map()
 
         const token = await this.authflow.getXboxToken('http://xboxlive.com')
         const authHeader = `XBL3.0 x=${token.userHash};${token.XSTSToken}`
 
-        const response = await resilientFetch('https://profile.xboxlive.com/users/batch/profile/settings', {
-            method: 'POST',
-            headers: {
-                'x-xbl-contract-version': '2',
-                'content-type': 'application/json',
-                Authorization: authHeader
-            },
-            body: JSON.stringify({ userIds: xuids, settings: ['Gamertag'] })
-        })
+        const profilesByXuid = new Map()
 
-        if (!response.ok) {
-            throw new Error(`Failed to fetch Xbox profiles, status ${response.status}`)
+        for (let i = 0; i < xuids.length; i += 50) {
+            const chunk = xuids.slice(i, i + 50)
+
+            const response = await resilientFetch('https://profile.xboxlive.com/users/batch/profile/settings', {
+                method: 'POST',
+                headers: {
+                    'x-xbl-contract-version': '2',
+                    'content-type': 'application/json',
+                    Authorization: authHeader
+                },
+                body: JSON.stringify({ userIds: chunk, settings: ['Gamertag', 'GameDisplayPicRaw'] })
+            })
+
+            if (!response.ok) {
+                throw new Error(`Failed to fetch Xbox profiles, status ${response.status}`)
+            }
+
+            const data = await response.json()
+            const profiles = Array.isArray(data?.profileUsers) ? data.profileUsers : []
+
+            for (const profile of profiles) {
+                const gamertag = profile.settings?.find((setting) => setting.id === 'Gamertag')?.value
+                const rawPic = profile.settings?.find((setting) => setting.id === 'GameDisplayPicRaw')?.value
+
+                if (gamertag) {
+                    profilesByXuid.set(profile.id, {
+                        gamertag,
+                        gamerpic: rawPic ? rawPic.replace(/^http:/, 'https:') : null
+                    })
+                }
+            }
         }
 
-        const data = await response.json()
-        const profiles = Array.isArray(data?.profileUsers) ? data.profileUsers : []
+        return profilesByXuid
+    }
 
-        const gamertagsByXuid = new Map()
-        for (const profile of profiles) {
-            const gamertag = profile.settings?.find((setting) => setting.id === 'Gamertag')?.value
-            if (gamertag) gamertagsByXuid.set(profile.id, gamertag)
-        }
+    async fetchGamertagsByXuids(xuids) {
+        const profiles = await this.fetchProfilesByXuids(xuids)
 
-        return gamertagsByXuid
+        return new Map([...profiles].map(([xuid, profile]) => [xuid, profile.gamertag]))
     }
 
     async fetchPresenceByXuids(xuids) {
