@@ -1,15 +1,10 @@
 const logger = require('./logger')
 
-const PURGE_INTERVAL_MS = 10 * 60 * 1000 // 10 minutes
-const BULK_DELETE_AGE_LIMIT_MS = 14 * 24 * 60 * 60 * 1000 // Discord bulkDelete only works on messages < 14 days old
+const PURGE_INTERVAL_MS = 10 * 60 * 1000
+const BULK_DELETE_AGE_LIMIT_MS = 14 * 24 * 60 * 60 * 1000
 
 let intervalHandle = null
 
-/**
- * Deletes every message currently in a channel.
- * Messages younger than 14 days are removed in batches via bulkDelete.
- * Anything older has to be deleted one-by-one (Discord API limitation).
- */
 async function purgeChannel(channel) {
     let totalDeleted = 0
 
@@ -38,7 +33,6 @@ async function purgeChannel(channel) {
                 }
             }
 
-            // Stop once a fetch comes back with fewer than 100 (nothing left) to avoid looping forever
             keepGoing = messages.size === 100
         }
 
@@ -65,12 +59,6 @@ async function runPurgeCycle(client, channelIds) {
     }
 }
 
-/**
- * Starts the recurring purge loop. Reads the channel id list fresh from
- * config on every cycle, so editing config.json takes effect on the next tick
- * without needing a restart (as long as something reloads the config module,
- * e.g. by requiring it with a cache-busting read - see index.js wiring).
- */
 function startChannelPurger(client, getChannelIds) {
     if (intervalHandle) {
         clearInterval(intervalHandle)
@@ -82,7 +70,6 @@ function startChannelPurger(client, getChannelIds) {
         await runPurgeCycle(client, channelIds)
     }
 
-    // Run once shortly after startup, then every 10 minutes
     setTimeout(tick, 5000)
     intervalHandle = setInterval(tick, PURGE_INTERVAL_MS)
 
@@ -96,4 +83,4 @@ function stopChannelPurger() {
     }
 }
 
-module.exports = { startChannelPurger, stopChannelPurger, purgeChannel }
+module.exports = { startChannelPurger, stopChannelPurger }
