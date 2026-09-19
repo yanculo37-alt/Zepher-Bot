@@ -123,7 +123,6 @@ module.exports = {
             let dmChannel
             try {
                 dmChannel = await interaction.user.createDM()
-                await dmChannel.send({ components: [infoContainer('Connecting…', `Setting up your relay with **${realm.name}**.`)], flags: ComponentsV2Flags })
             } catch (error) {
                 await interaction.editReply({ components: [errorContainer('DMs are closed', "I can't message you. Please enable direct messages from server members and run /join again.")], flags: ComponentsV2Flags })
                 return
@@ -150,10 +149,7 @@ module.exports = {
 
             await interaction.editReply({ components: [successContainer('Successfully joined', `Connected to **${realm.name}**. Check your DMs.`)], flags: ComponentsV2Flags })
             await dmChannel.send({
-                components: [successContainer(
-                    'Connected',
-                    `You're connected to **${realm.name}**.\nSend a message here and it'll be sent as chat in the Realm. Chat, joins/leaves, and deaths from the Realm will show up here too.\nUse \`/cancel\` to disconnect.`
-                )],
+                components: [infoContainer('Relay active', "Send a message here and it'll be sent as chat in the Realm. Chat, joins/leaves, and deaths from the Realm will show up here too.\nUse `/cancel` to disconnect.")],
                 flags: ComponentsV2Flags
             })
         } catch (error) {
