@@ -1,15 +1,22 @@
-const { ContainerBuilder, TextDisplayBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, MessageFlags } = require('discord.js')
+const { ContainerBuilder, TextDisplayBuilder, SectionBuilder, ThumbnailBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, MessageFlags } = require('discord.js')
 
 const brandColor = 0x2b2d31
 const successColor = 0x57f287
 const errorColor = 0xed4245
 
-function buildContainer(color, title, description, linkButton) {
-    const container = new ContainerBuilder()
-        .setAccentColor(color)
-        .addTextDisplayComponents(
-            new TextDisplayBuilder().setContent(`**${title}**\n${description}`)
+function buildContainer(color, title, description, linkButton, thumbnailUrl) {
+    const container = new ContainerBuilder().setAccentColor(color)
+    const text = new TextDisplayBuilder().setContent(`**${title}**\n${description}`)
+
+    if (thumbnailUrl) {
+        container.addSectionComponents(
+            new SectionBuilder()
+                .addTextDisplayComponents(text)
+                .setThumbnailAccessory(new ThumbnailBuilder().setURL(thumbnailUrl))
         )
+    } else {
+        container.addTextDisplayComponents(text)
+    }
 
     if (linkButton) {
         const row = new ActionRowBuilder().addComponents(
@@ -24,8 +31,8 @@ function buildContainer(color, title, description, linkButton) {
     return container
 }
 
-function successContainer(title, description, linkButton) {
-    return buildContainer(successColor, title, description, linkButton)
+function successContainer(title, description, linkButton, thumbnailUrl) {
+    return buildContainer(successColor, title, description, linkButton, thumbnailUrl)
 }
 
 function errorContainer(title, description) {
